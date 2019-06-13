@@ -1,13 +1,16 @@
-from datetime import time
+import time
 import numpy
 import pandas
 from random import randint, random, choice
 
+# GLOBALS
+# setup code: import .csv data using pandas, convert to array, find the maximum distance between cities
 city_coordinates = pandas.read_csv(
     'city_position.csv', index_col='name of city')
 print(city_coordinates)
 
 distances = []
+# array of all cities, contains array of x, y coordinates
 city_arr = []
 
 for i in range(len(city_coordinates)):
@@ -22,28 +25,35 @@ for city in city_arr:
 for i in range(len(city_coordinates)):
     city = city_coordinates.loc[i + 1]
     city_arr.append(numpy.array(city[0], city[1]))
-max_dist = max(distances)
-best_before_chromosome = []
 
-# Procedure tsp - generate - initial - population, start population with population size pop_size
+# max distance between cities, GA is a maximization algorithm
+max_dist = max(distances)
+
+
+# Procedure tsp-generate-initial-population, start population with population size pop_size
 
 
 def initialize_population(pop_size):
+    print("initialzing population..")
     population = []
     for i in range(pop_size):
         chromosome = []
         chromosome.append(1)
-        print("no of cities = " + str(len(city_coordinates.index)))
+        # print("no of cities = " + str(len(city_coordinates.index)))
+        # generate chromosome with length equal to the number of cities
         while len(chromosome) is not len(city_coordinates.index):
             index = randint(2, len(city_coordinates.index))
+            # if city in unvisited, add it to the chromosome
             if index not in chromosome:
                 chromosome.append(index)
-        print(chromosome)
+        # print(chromosome)
+        # add chromosome to population
         population.append(chromosome)
     return population
 
 
 # TSP fitness function for GA
+# fitness is the sum of distances between each city on the path subtracted from the maximum distance
 def fitness(chromosome):
     sum = 0
     for i in range(len(chromosome) - 1):
@@ -54,8 +64,23 @@ def fitness(chromosome):
     sum += max_dist - numpy.linalg.norm(city_arr[next_gene] - city_arr[0])
     return sum
 
+# cost is total distance(would be the fitness fn for the minimization problem)
+
+
+def cost(chromosome):
+    sum = 0
+    for i in range(len(chromosome) - 1):
+        gene = chromosome[i]
+        next_gene = chromosome[i + 1]
+        sum += numpy.linalg.norm(city_arr[next_gene] - city_arr[gene])
+    sum += numpy.linalg.norm(city_arr[next_gene] - city_arr[0])
+    return sum
+
+# roulette_wheel_selection assigns a probabilty for each chromosome based on it's fitness value
+
 
 def roulette_wheel_selection(population):
+    start = time.time()
     fitness_sum = 0
     mating_pool = []
     for chromosome in population:
@@ -63,13 +88,14 @@ def roulette_wheel_selection(population):
 
     for chromosome in population:
         r = random()
-        j = 1
+        j = 0
         sum = 0
         while sum < r:
-            sum += fitness(population[j])
+            sum += fitness(population[j]) / fitness_sum
             j += 1
         mating_pool.append(population[j - 1])
-    return mating_pool
+    end = time.time()
+    return mating_pool, end - start
 
 
 def survival_of_the_fittest(population):
@@ -78,6 +104,7 @@ def survival_of_the_fittest(population):
         if fitness(population[i]) > fitness(population[j]):
             j = i
     print("fittest = " + str(fitness(population[j])))
+    print("cost = " + str(cost(population[j])))
     return j
 
 # def tournament_selection(population):
@@ -160,12 +187,20 @@ def reproduce(population, mating_pool, p_c, p_mu):
 
 def genetic_algorithm(pop_size, N_g, p_c, p_u):
     population = initialize_population(pop_size)
+    print("initial pop: ")
+    for i in population:
+        print(i)
     for i in range(N_g):
-        mating_pool = roulette_wheel_selection(population)
+        mating_pool, exec_time = roulette_wheel_selection(population)
         population = reproduce(population, mating_pool, p_c, p_u)
+        print("GEN" + str(i) + " took " + str(exec_time) + " seconds to select")
     fittest_index = survival_of_the_fittest(population)
+    print("final pop: ")
+    for i in population:
+        print(i)
     return population[fittest_index]
 
 
-result = genetic_algorithm(50, 100, 0.6, 0.001)
+result = genetic_algorithm(50, 100, 0.6, 0.06)
 print("result = " + str(result))
+print("cost = " + str(cost(result)))
