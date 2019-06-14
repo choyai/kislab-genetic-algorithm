@@ -2,11 +2,12 @@ import time
 import numpy
 import pandas
 from random import randint, random, choice
+import copy
 
 # GLOBALS
 # setup code: import .csv data using pandas, convert to array, find the maximum distance between cities
 city_coordinates = pandas.read_csv(
-    'city_position.csv', index_col='name of city')
+    'world_position.csv', index_col='name of city')
 print(city_coordinates)
 
 distances = []
@@ -28,28 +29,6 @@ for i in range(len(city_coordinates)):
 
 # max distance between cities, GA is a maximization algorithm
 max_dist = max(distances)
-
-
-# Procedure tsp-generate-initial-population, start population with population size pop_size
-
-
-def initialize_population(pop_size):
-    print("initialzing population..")
-    population = []
-    for i in range(pop_size):
-        chromosome = []
-        chromosome.append(1)
-        # print("no of cities = " + str(len(city_coordinates.index)))
-        # generate chromosome with length equal to the number of cities
-        while len(chromosome) is not len(city_coordinates.index):
-            index = randint(2, len(city_coordinates.index))
-            # if city in unvisited, add it to the chromosome
-            if index not in chromosome:
-                chromosome.append(index)
-        # print(chromosome)
-        # add chromosome to population
-        population.append(chromosome)
-    return population
 
 
 # TSP fitness function for GA
@@ -76,7 +55,47 @@ def cost(chromosome):
     sum += numpy.linalg.norm(city_arr[next_gene] - city_arr[0])
     return sum
 
+# chromosome class
+
+
+class Chromosome:
+    def __init__(self, city_dataframe, array=[]):
+        self.length = len(city_dataframe.index)
+        if len(array) is 0:
+            self.array = [1]
+            while len(self.array) is not self.length:
+                index = randint(2, self.length)
+                if index not in self.array:
+                    self.array.append(index)
+        else:
+            self.array = array
+        self.fitness = fitness(self.array)
+        self.cost = cost(self.array)
+
+    def __str__(self):
+        return str(self.array)
+
+    def __copy__(self):
+        b = Chromosome(city_coordinates)
+        b.array = self.array
+        return b
+
+    def __deepcopy__(self, memo):
+        return Chromosome(copy.deepcopy(city_coordinates, self.array, memo))
+
+
+# Procedure tsp-generate-initial-population, start population with population size pop_size
+
+
+def initialize_population(pop_size):
+    print("initialzing population..")
+    population = []
+    for i in range(pop_size):
+        chromosome = Chromosome(city_coordinates)
+        population.append(chromosome)
+    return population
 # roulette_wheel_selection assigns a probabilty for each chromosome based on it's fitness value
+# returns execution time
 
 
 def roulette_wheel_selection(population):
@@ -84,14 +103,14 @@ def roulette_wheel_selection(population):
     fitness_sum = 0
     mating_pool = []
     for chromosome in population:
-        fitness_sum += fitness(chromosome)
+        fitness_sum += chromosome.fitness
 
     for chromosome in population:
         r = random()
         j = 0
         sum = 0
         while sum < r:
-            sum += fitness(population[j]) / fitness_sum
+            sum += population[j].fitness / fitness_sum
             j += 1
         mating_pool.append(population[j - 1])
     end = time.time()
@@ -101,10 +120,10 @@ def roulette_wheel_selection(population):
 def survival_of_the_fittest(population):
     j = 0
     for i in range(len(population)):
-        if fitness(population[i]) > fitness(population[j]):
+        if population[i].fitness > population[j].fitness:
             j = i
-    print("fittest = " + str(fitness(population[j])))
-    print("cost = " + str(cost(population[j])))
+    print("fittest = " + str(population[j].fitness))
+    print("cost = " + str(population[j].cost))
     return j
 
 # def tournament_selection(population):
@@ -112,25 +131,27 @@ def survival_of_the_fittest(population):
 
 
 def circular_operator_encode(chromosome):
-    unvisited_cities = list(range(1, len(chromosome) + 1))
+    unvisited_cities = list(range(1, chromosome.length + 1))
     # print(unvisited_cities)
-    # print(chromosome)
-    for i in range(len(chromosome)):
+    # print(chromosome.array)
+    new_array = list(range(1, chromosome.length + 1))
+    for i in range(chromosome.length):
         j = 0
-        while chromosome[i] != unvisited_cities[j]:
+        while chromosome.array[i] != unvisited_cities[j]:
             j += 1
         del unvisited_cities[j]
-        chromosome[i] = j
-    return chromosome
+        new_array[i] = j
+    return Chromosome(city_coordinates, new_array)
 
 
 def circular_operator_decode(chromosome):
-    unvisited_cities = list(range(1, len(chromosome) + 1))
-    for i in range(len(chromosome)):
-        j = chromosome[i]
-        chromosome[i] = unvisited_cities[j]
+    unvisited_cities = list(range(1, chromosome.length + 1))
+    new_array = list(range(1, chromosome.length + 1))
+    for i in range(chromosome.length):
+        j = chromosome.array[i]
+        new_array[i] = unvisited_cities[j]
         del unvisited_cities[j]
-    return chromosome
+    return Chromosome(city_coordinates, new_array)
 
 
 def crossover(father, mother, p_c):
@@ -138,12 +159,12 @@ def crossover(father, mother, p_c):
     if random() > p_c:
         return father, mother
     else:
-        cut_point = randint(1, len(father) - 1)
-        father_enc = circular_operator_encode(father.copy())
-        mother_enc = circular_operator_encode(mother.copy())
-        temp = mother_enc[cut_point]
-        mother_enc[cut_point] = father_enc[cut_point]
-        father_enc[cut_point] = temp
+        cut_point = randint(1, len(father.array) - 1)
+        father_enc = circular_operator_encode(father)
+        mother_enc = circular_operator_encode(mother)
+        temp = mother_enc.array[cut_point]
+        mother_enc.array[cut_point] = father_enc.array[cut_point]
+        father_enc.array[cut_point] = temp
         return circular_operator_decode(father_enc), circular_operator_decode(mother_enc)
 
 
@@ -151,15 +172,19 @@ def mutate(chromosome, p_mu):
     if random() > p_mu:
         return chromosome
     else:
-        mutation_point1 = randint(1, len(chromosome) - 1)
-        mutation_point2 = randint(1, len(chromosome) - 1)
-        temp = chromosome[mutation_point1]
-        chromosome[mutation_point1] = chromosome[mutation_point2]
-        chromosome[mutation_point2] = temp
+        mutation_point1 = randint(1, chromosome.length - 1)
+        mutation_point2 = randint(1, chromosome.length - 1)
+        temp = chromosome.array[mutation_point1]
+        chromosome.array[mutation_point1] = chromosome.array[mutation_point2]
+        chromosome.array[mutation_point2] = temp
         return chromosome
+
+# reproduce using mating pool
+# returns exec_time
 
 
 def reproduce(population, mating_pool, p_c, p_mu):
+    start = time.time()
     new_generation = []
     fittest_index = survival_of_the_fittest(population)
     new_generation.append(population[fittest_index])
@@ -182,7 +207,8 @@ def reproduce(population, mating_pool, p_c, p_mu):
     while mating_pool:
         new_generation.append(mating_pool[0])
         del mating_pool[0]
-    return new_generation
+    end = time.time()
+    return new_generation, end - start
 
 
 def genetic_algorithm(pop_size, N_g, p_c, p_u):
@@ -191,9 +217,10 @@ def genetic_algorithm(pop_size, N_g, p_c, p_u):
     for i in population:
         print(i)
     for i in range(N_g):
-        mating_pool, exec_time = roulette_wheel_selection(population)
-        population = reproduce(population, mating_pool, p_c, p_u)
-        print("GEN" + str(i) + " took " + str(exec_time) + " seconds to select")
+        mating_pool, selection_time = roulette_wheel_selection(population)
+        population, mating_time = reproduce(population, mating_pool, p_c, p_u)
+        print("GEN" + str(i) + " took " + str(selection_time) +
+              " seconds to select and " + str(mating_time) + " to reproduce")
     fittest_index = survival_of_the_fittest(population)
     print("final pop: ")
     for i in population:
@@ -201,6 +228,6 @@ def genetic_algorithm(pop_size, N_g, p_c, p_u):
     return population[fittest_index]
 
 
-result = genetic_algorithm(50, 100, 0.6, 0.06)
+result = genetic_algorithm(50, 10000, 0.6, 0.06)
 print("result = " + str(result))
-print("cost = " + str(cost(result)))
+print("cost = " + str(result.cost))
