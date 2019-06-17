@@ -226,7 +226,7 @@ def reproduce(population, mating_pool, p_c, p_mu, fitness_sum, dict):
     return new_generation, end - start
 
 
-def genetic_algorithm(pop_size, N_g, p_c, p_u):
+def genetic_algorithm(pop_size, N_g, p_c, p_u, iteration):
     start = time.time()
     dict = {"generation": [], "best": [], "avg": [], "worst": [], "time": []}
     dict["generation"].append(1)
@@ -236,12 +236,18 @@ def genetic_algorithm(pop_size, N_g, p_c, p_u):
     for i in population:
         print(i)
     for i in range(N_g - 1):
+        time_per_gen = time.time()
         mating_pool, selection_time, fitness_sum = roulette_wheel_selection(
             population)
         population, mating_time = reproduce(
             population, mating_pool, p_c, p_u, fitness_sum, dict)
-        print("GEN" + str(i) + " took " + str(selection_time) +
-              " seconds to select and " + str(mating_time) + " to reproduce")
+        print("GEN" + str(i + 1) + " of iteration " + str(iteration + 1))
+        # print("GEN" + str(i) + " took " + str(selection_time) +
+        # " seconds to select and " + str(mating_time) + " to reproduce")
+        rem_time = (time.time() - time_per_gen) * \
+            ((N_g - i) + N_g * (100 - iteration))
+        print("remaining time = " + str(rem_time) +
+              "seconds + (" + str(rem_time / 3600) + " hours)")
         gen_time = time.time() - start
         dict["generation"].append(i + 2)
         dict["time"].append(gen_time)
@@ -255,12 +261,12 @@ def genetic_algorithm(pop_size, N_g, p_c, p_u):
 best_dict = {}
 best_result = 0
 for i in range(100):
-    result, dict = genetic_algorithm(100, 10000, 1.0, 0.06)
+    result, dict = genetic_algorithm(100, 10000, 1.0, 0.05, i)
     if result.fitness > best_result:
         best_dict = dict.copy()
         best_result = result.fitness
     print("result = " + str(result))
     print("cost = " + str(result.cost))
-gen_dataf = pandas.DataFrame(best_dict)
+    gen_dataf = pandas.DataFrame(best_dict)
+    gen_dataf.to_csv("result.csv", index=False)
 print(gen_dataf)
-gen_dataf.to_csv("result.csv", index=False)
